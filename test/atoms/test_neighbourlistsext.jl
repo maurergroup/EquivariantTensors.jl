@@ -22,7 +22,7 @@ sys = rattle!(bulk(:Si, cubic=true) * (3,3,2), 0.1u"Å")
 rcut = 5.0u"Å"
 G_sys = ET.Atoms.interaction_graph(sys, rcut)
 
-nlist = NeighbourLists.PairList(sys, rcut)
+nlist = NeighbourLists.PairList(sys, rcut, int_type = Int)
 
 println_slim(@test G_sys.graph_data.pbc == periodicity(sys))
 println_slim(@test cell_vectors(sys) == (G_sys.graph_data.cell .* u"Å"))
