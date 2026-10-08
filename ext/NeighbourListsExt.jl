@@ -3,56 +3,58 @@
 
 module NeighbourListsExt
 
+using Unitful
+import AtomsBase
 using NeighbourLists
 import EquivariantTensors as ET
-import NeighbourLists.AtomsBase: AbstractSystem
-using DecoratedParticles: PState 
+using DecoratedParticles: PState
+using StaticArrays
 
-function ET.Atoms.interaction_graph(sys::AbstractSystem, rcut) 
+function ET.Atoms.interaction_graph(sys::AtomsBase.AbstractSystem, rcut)
    nlist = NeighbourLists.PairList(sys, rcut)
-   return ET.Atoms.nlist2graph(nlist, sys)  
+   return ET.Atoms.nlist2graph(nlist, sys)
 end
 
-function ET.Atoms.nlist2graph(nlist::NeighbourLists.PairList, sys::AbstractSystem)
-   ii = copy(nlist.i)
-   jj = copy(nlist.j)
-   first = copy(nlist.first) 
-   R_ij = [ NeighbourLists._getR(nlist, n) for n = 1:length(ii) ] 
-   S_i = [ NeighbourLists.AtomsBase.species(sys, i) for i in ii ] 
-   S_j = [ NeighbourLists.AtomsBase.species(sys, j) for j in jj ]
-   X_ij = [ PState(𝐫 = 𝐫, z0 = si, z1 = sj, 𝐒 = shift) 
+function ET.Atoms.nlist2graph(nlist::NeighbourLists.PairList, sys::AtomsBase.AbstractSystem)
+   ii = convert(Vector{Int}, nlist.i)
+   jj = convert(Vector{Int}, nlist.j)
+   first = copy(nlist.first)
+   R_ij = [ NeighbourLists._getR(nlist, n) for n = 1:length(ii) ]
+   S_i = [ AtomsBase.species(sys, i) for i in ii ]
+   S_j = [ AtomsBase.species(sys, j) for j in jj ]
+   X_ij = [ PState(𝐫 = 𝐫, z0 = si, z1 = sj, 𝐒 = convert(SVector{3, Int}, shift))
             for (𝐫, si, sj, shift) in zip(R_ij, S_i, S_j, nlist.S) ]
 
-   # for node data we use _only_ the atomic species for now so that we 
-   # don't even give the option of using position information directly. 
-   # ... until we sort out how to best handle this in ET. 
-   X_i = [ PState(𝐫 = NeighbourLists.Unitful.ustrip.(NeighbourLists.AtomsBase.position(sys, i)), 
-                  z = NeighbourLists.AtomsBase.species(sys, i))
+   # for node data we use _only_ the atomic species for now so that we
+   # don't even give the option of using position information directly.
+   # ... until we sort out how to best handle this in ET.
+   X_i = [ PState(𝐫 = ustrip.(AtomsBase.position(sys, i)),
+                  z = AtomsBase.species(sys, i))
            for i = 1:length(sys) ]
 
-   cell_vecs_u = NeighbourLists.AtomsBase.cell_vectors(sys)
-   cell_vecs = ntuple( i -> NeighbourLists.Unitful.ustrip.(cell_vecs_u[i]), 
+   cell_vecs_u = AtomsBase.cell_vectors(sys)
+   cell_vecs = ntuple( i -> ustrip.(cell_vecs_u[i]),
                        length(cell_vecs_u) )
 
-   sys_data = ( pbc = NeighbourLists.AtomsBase.periodicity(sys), 
+   sys_data = ( pbc = AtomsBase.periodicity(sys),
                cell = cell_vecs
-              )          
+              )
 
-   G = ET.ETGraph(ii, jj; 
-                  edge_data = X_ij, 
-                  node_data = X_i, 
+   G = ET.ETGraph(ii, jj;
+                  edge_data = X_ij,
+                  node_data = X_i,
                   graph_data = sys_data)
    @assert G.first == first
 
-   return G 
-end 
+   return G
+end
 
-function ET.Atoms.forces_from_edge_grads(sys::AbstractSystem, G::ET.ETGraph, ∇E_edges)
-   
+function ET.Atoms.forces_from_edge_grads(sys::AtomsBase.AbstractSystem, G::ET.ETGraph, ∇E_edges)
+
    TFRC = typeof(∇E_edges[1].𝐫)
-   F = zeros(TFRC, length(sys)) 
+   F = zeros(TFRC, length(sys))
 
-   for (i, j, e) in zip(G.ii, G.jj, ∇E_edges) 
+   for (i, j, e) in zip(G.ii, G.jj, ∇E_edges)
       F[i] -= e.𝐫
       F[j] += e.𝐫
    end
